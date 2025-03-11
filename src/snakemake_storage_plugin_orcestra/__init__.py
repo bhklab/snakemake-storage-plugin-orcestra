@@ -4,6 +4,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional
 from urllib import parse
 
+from orcestradownloader.dataset_config import DATASET_CONFIG
+from orcestradownloader.logging_config import logger as orcestra_logger
+from orcestradownloader.managers import (
+    REGISTRY,
+    DatasetManager,
+    UnifiedDataManager,
+)
+from orcestradownloader.models.base import BaseModel
 
 # Raise errors that will not be handled within this plugin but thrown upwards to
 # Snakemake and the user as WorkflowError.
@@ -24,10 +32,6 @@ from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
     StorageProviderBase,
     StorageQueryValidationResult,
 )
-from orcestradownloader.logging_config import logger as orcestra_logger
-from orcestradownloader.managers import UnifiedDataManager, DatasetManager, REGISTRY
-from orcestradownloader.dataset_config import DATASET_CONFIG
-from orcestradownloader.models.base import BaseModel
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -188,16 +192,22 @@ class StorageObject(StorageObjectRead):
             if loop.is_running():
                 # If loop is already running, create a new future task and run it directly
                 asyncio.create_task(
-                    unified_manager.fetch_by_name(self.dataset_type, force=True)
+                    unified_manager.fetch_by_name(
+                        self.dataset_type, force=True
+                    )
                 )
             else:
                 # If no loop is running, run the coroutine directly
                 loop.run_until_complete(
-                    unified_manager.fetch_by_name(self.dataset_type, force=True)
+                    unified_manager.fetch_by_name(
+                        self.dataset_type, force=True
+                    )
                 )
         except RuntimeError:
             # Fallback to creating a new loop if needed
-            asyncio.run(unified_manager.fetch_by_name(self.dataset_type, force=True))
+            asyncio.run(
+                unified_manager.fetch_by_name(self.dataset_type, force=True)
+            )
 
         try:
             self.dataset_metadata = self.manager[self.dataset_name]
@@ -288,9 +298,10 @@ class StorageObject(StorageObjectRead):
                 f"Downloading {self.dataset_name} from {self.dataset_type}",
                 total=100,
             )
-            temp_file = f"{self.local_path()}.temp"
+            temp_file = Path(f"{self.local_path()}.temp")
             # Download the dataset to the local path
-            with open(temp_file, "wb") as f:
+            # with open(temp_file, "wb") as f:
+            with temp_file.open("wb") as f:
                 response = requests.get(download_url, stream=True)
                 # get total size based on header content-length
                 total_size = int(response.headers.get("content-length", 0))

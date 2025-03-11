@@ -15,7 +15,8 @@ pip = ">=24.3.1,<25"
 
 [environments]
 dev = ["test", "dev"]
-test = ["test", "quality"]
+quality = ["quality"]
+test = ["test"]
 
 py311 = { features = ["py311", "test"], no-default-feature = true }
 py312 = { features = ["py312", "test"], no-default-feature = true }
@@ -24,7 +25,7 @@ py312 = { features = ["py312", "test"], no-default-feature = true }
 [feature.dev.pypi-dependencies]
 # snakemake_storage_plugin_orcestra = { path = ".", editable = true }
 # orcestra-downloader = { path = "../orcestra-downloader", editable = true }
-orcestra-downloader = {git = "https://github.com/jjjermiah/orcestra-downloader", branch = "dev"}
+orcestra-downloader = { git = "https://github.com/jjjermiah/orcestra-downloader", branch = "dev" }
 
 
 [feature.dev.dependencies]
@@ -44,7 +45,6 @@ python = "3.12.*"
 ############################################## TEST ################################################
 [feature.test.pypi-dependencies]
 snakemake_storage_plugin_orcestra = { path = ".", editable = true }
-snakemake_interface_common = "*"
 
 [feature.test.dependencies]
 pytest = "*"
