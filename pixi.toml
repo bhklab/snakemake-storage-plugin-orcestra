@@ -43,6 +43,8 @@ snakemake_storage_plugin_orcestra = { path = ".", editable = true }
 
 [feature.test.dependencies]
 pytest = "*"
+coverage = ">=7.6.12,<8"
+pytest-cov = ">=6.0.0,<7"
 
 ############################################## QUALITY ###############################################
 # Quality includes linting, type checking, and formatting
