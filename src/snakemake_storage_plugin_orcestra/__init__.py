@@ -1,25 +1,26 @@
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Optional, List
-from snakemake_interface_storage_plugins.settings import StorageProviderSettingsBase
-from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
-    StorageProviderBase,
-    StorageQueryValidationResult,
-    ExampleQuery,
-    Operation,
-    QueryType,
-)
-from snakemake_interface_storage_plugins.storage_object import (
-    StorageObjectRead,
-    StorageObjectWrite,
-    StorageObjectGlob,
-    retry_decorator,
-)
-from snakemake_interface_storage_plugins.io import IOCacheStorageInterface
-
+from typing import Any, Iterable, List, Optional
 
 # Raise errors that will not be handled within this plugin but thrown upwards to
 # Snakemake and the user as WorkflowError.
 from snakemake_interface_common.exceptions import WorkflowError  # noqa: F401
+from snakemake_interface_storage_plugins.io import IOCacheStorageInterface
+from snakemake_interface_storage_plugins.settings import (
+    StorageProviderSettingsBase,
+)
+from snakemake_interface_storage_plugins.storage_object import (
+    StorageObjectGlob,
+    StorageObjectRead,
+    StorageObjectWrite,
+    retry_decorator,
+)
+from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
+    ExampleQuery,
+    Operation,
+    QueryType,
+    StorageProviderBase,
+    StorageQueryValidationResult,
+)
 
 
 # Optional:
@@ -125,7 +126,7 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
         # and set additional attributes.
         pass
 
-    async def inventory(self, cache: IOCacheStorageInterface):
+    async def inventory(self, cache: IOCacheStorageInterface) -> None:
         """From this file, try to find as much existence and modification date
         information as possible. Only retrieve that information that comes for free
         given the current object.
@@ -147,7 +148,7 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
         """Return a unique suffix for the local path, determined from self.query."""
         ...
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Perform local cleanup of any remainders of the storage object."""
         # self.local_path() should not be removed, as this is taken care of by
         # Snakemake.
@@ -172,7 +173,7 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
         ...
 
     @retry_decorator
-    def retrieve_object(self):
+    def retrieve_object(self) -> None:
         # Ensure that the object is accessible locally under self.local_path()
         ...
 
@@ -180,13 +181,13 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
     # StorageObjectReadWrite.
 
     @retry_decorator
-    def store_object(self):
+    def store_object(self) -> None:
         # Ensure that the object is stored at the location specified by
         # self.local_path().
         ...
 
     @retry_decorator
-    def remove(self):
+    def remove(self) -> None:
         # Remove the object from the storage.
         ...
 
