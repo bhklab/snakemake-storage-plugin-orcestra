@@ -15,7 +15,6 @@ from orcestradownloader.models.base import BaseModel
 
 # Raise errors that will not be handled within this plugin but thrown upwards to
 # Snakemake and the user as WorkflowError.
-# from snakemake_interface_common.logging import get_logger
 from snakemake_interface_common.exceptions import WorkflowError  # noqa: F401
 from snakemake_interface_storage_plugins.io import IOCacheStorageInterface
 from snakemake_interface_storage_plugins.settings import (
@@ -47,6 +46,13 @@ for name, config in DATASET_CONFIG.items():
     REGISTRY.register(name, manager)
 
 unified_manager = UnifiedDataManager(REGISTRY, force=True)
+
+
+orcestra_logger.setLevel("WARNING")
+
+for handler in orcestra_logger.handlers[:]:
+    orcestra_logger.removeHandler(handler)
+    handler.close()
 
 
 @dataclass
@@ -248,7 +254,19 @@ class StorageObject(StorageObjectRead):
     # provided by snakemake-interface-storage-plugins.
     @retry_decorator
     def exists(self) -> bool:
-        return self.dataset_metadata is not None
+        if self.dataset_metadata:
+            return True
+        from difflib import get_close_matches
+
+        dataset_names = self.manager.names()
+
+        if self.dataset_name not in dataset_names:
+            errmsg = (
+                f"Dataset {self.dataset_name} not found in {self.dataset_type}."
+                f"Did you mean one of {get_close_matches(self.dataset_name, dataset_names)}?"
+            )
+            orcestra_logger.error(errmsg)
+        return False
 
     @retry_decorator
     def mtime(self) -> float:

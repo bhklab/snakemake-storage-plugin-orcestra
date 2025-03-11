@@ -64,6 +64,7 @@ description = "Run pytest"
 [feature.quality.dependencies]
 ruff = ">=0.4.8"
 mypy = ">=1.13.0,<2"
+types-requests = ">=2.32.0.20250306,<3"
 
 [feature.quality.tasks]
 ruff-check.cmd = ["ruff", "--config", "config/ruff.toml", "check", "src"]
