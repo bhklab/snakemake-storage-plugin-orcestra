@@ -23,6 +23,10 @@ py312 = { features = ["py312", "test"], no-default-feature = true }
 ############################################## DEV ###############################################
 [feature.dev.pypi-dependencies]
 snakemake_storage_plugin_orcestra = { path = ".", editable = true }
+orcestra-downloader = { path = "../orcestra-downloader", editable = true }
+# orcestra-downloader = {git = "https://github.com/jjjermiah/orcestra-downloader", branch = "dev"}
+
+snakemake = { git = "https://github.com/snakemake/snakemake.git" }
 
 [feature.dev.dependencies]
 ipython = "*"
