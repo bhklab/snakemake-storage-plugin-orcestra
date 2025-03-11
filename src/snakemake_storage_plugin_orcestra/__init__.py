@@ -21,45 +21,13 @@ from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
     StorageProviderBase,
     StorageQueryValidationResult,
 )
+from snakemake_storage_plugin_orcestra.orcestra_helper import manager, similar_names
+from urllib import parse
 
 
-# Optional:
-# Define settings for your storage plugin (e.g. host url, credentials).
-# They will occur in the Snakemake CLI as --storage-<storage-plugin-name>-<param-name>
-# Make sure that all defined fields are 'Optional' and specify a default value
-# of None or anything else that makes sense in your case.
-# Note that we allow storage plugin settings to be tagged by the user. That means,
-# that each of them can be specified multiple times (an implicit nargs=+), and
-# the user can add a tag in front of each value (e.g. tagname1:value1 tagname2:value2).
-# This way, a storage plugin can be used multiple times within a workflow with different
-# settings.
 @dataclass
 class StorageProviderSettings(StorageProviderSettingsBase):
     pass
-    # myparam: Optional[int] = field(
-    #     default=None,
-    #     metadata={
-    #         "help": "Some help text",
-    #         # Optionally request that setting is also available for specification
-    #         # via an environment variable. The variable will be named automatically as
-    #         # SNAKEMAKE_<storage-plugin-name>_<param-name>, all upper case.
-    #         # This mechanism should only be used for passwords, usernames, and other
-    #         # credentials.
-    #         # For other items, we rather recommend to let people use a profile
-    #         # for setting defaults
-    #         # (https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles).
-    #         "env_var": False,
-    #         # Optionally specify a function that parses the value given by the user.
-    #         # This is useful to create complex types from the user input.
-    #         "parse_func": ...,
-    #         # If a parse_func is specified, you also have to specify an unparse_func
-    #         # that converts the parsed value back to a string.
-    #         "unparse_func": ...,
-    #         # Optionally specify that setting is required when the executor is in use.
-    #         "required": True,
-    #         # Optionally specify multiple args with "nargs": "+"
-    #     },
-    # )
 
 
 # Required:
@@ -82,24 +50,37 @@ class StorageProvider(StorageProviderBase):
     def example_queries(cls) -> List[ExampleQuery]:
         """Return an example queries with description for this storage provider (at
         least one)."""
-        ...
+        return [
+            ExampleQuery(
+                query="orcestra://pharmacosets/CCLE_2015",
+                description="Download the CCLE 2015 dataset.",
+                query_type=QueryType.INPUT,
+            )
+        ]
 
     def rate_limiter_key(self, query: str, operation: Operation) -> Any:
         """Return a key for identifying a rate limiter given a query and an operation.
-
-        This is used to identify a rate limiter for the query.
-        E.g. for a storage provider like http that would be the host name.
-        For s3 it might be just the endpoint URL.
+        Notes
+        -----
+        Unused in orcestra-downloader
         """
         ...
 
     def default_max_requests_per_second(self) -> float:
         """Return the default maximum number of requests per second for this storage
-        provider."""
+        provider.
+        Notes
+        -----
+        Unused in orcestra-downloader
+        """
         ...
 
     def use_rate_limiter(self) -> bool:
-        """Return False if no rate limiting is needed for this provider."""
+        """Return False if no rate limiting is needed for this provider.
+        Notes
+        -----
+        Unused in orcestra-downloader
+        """
         ...
 
     @classmethod
@@ -108,7 +89,43 @@ class StorageProvider(StorageProviderBase):
         # Ensure that also queries containing wildcards (e.g. {sample}) are accepted
         # and considered valid. The wildcards will be resolved before the storage
         # object is actually used.
-        ...
+        datatypes = list(manager.names())
+        errormsg = ""
+        try:
+            parsed_query = parse.urlparse(query)
+        except Exception as e:
+            errormsg = (f"cannot be parsed as URL ({e})",)
+        else:
+            if parsed_query.scheme != "orcestra":
+                errormsg = (
+                    f"Invalid scheme in query '{query}'."
+                    f"{parsed_query.scheme} should be 'orcestra'."
+                )
+            elif parsed_query.netloc not in datatypes:
+                errormsg = (
+                    f"Invalid netloc in query '{query}'."
+                    f"{parsed_query.netloc} should be one of {datatypes}."
+                )
+            elif not parsed_query.path or (parsed_query.split("/") != 2):
+                errormsg = f"Invalid path in query '{query}'."
+                errormsg += (
+                    "Format should follow"
+                    f" 'orcestra://<datatype>/<dataset_name>' but got '{parsed_query}'."
+                )
+
+        if errormsg:
+            return StorageQueryValidationResult(query, False, errormsg)
+
+        dataset_names = manager.registry.get_manager(parsed_query.netloc).names()
+        if parsed_query.path not in dataset_names:
+            maybe_ds_names = similar_names(parsed_query.path, dataset_names)
+            errormsg = (
+                f"Dataset '{parsed_query.path}' not found in '{parsed_query.netloc}'."
+                f"Did you mean one of {maybe_ds_names}?"
+            )
+            return StorageQueryValidationResult(False, errormsg)
+
+        return StorageQueryValidationResult(True, "")
 
 
 # Required:
@@ -116,10 +133,14 @@ class StorageProvider(StorageProviderBase):
 # storage (e.g. because it is read-only see
 # snakemake-storage-http for comparison), remove the corresponding base classes
 # from the list of inherited items.
-class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
-    # For compatibility with future changes, you should not overwrite the __init__
-    # method. Instead, use __post_init__ to set additional attributes and initialize
-    # futher stuff.
+class StorageObject(StorageObjectRead):
+
+    # following attributes are inherited from StorageObjectRead:
+        # query = query
+        # keep_local = keep_local
+        # retrieve = retrieve
+        # provider = provider
+        # _overwrite_local_path = None
 
     def __post_init__(self):
         # This is optional and can be removed if not needed.
@@ -147,7 +168,8 @@ class StorageObject(StorageObjectRead, StorageObjectWrite, StorageObjectGlob):
 
     def local_suffix(self) -> str:
         """Return a unique suffix for the local path, determined from self.query."""
-        ...
+        parsed = parse.urlparse(self.query)
+        return f"{parsed.netloc}{parsed.path}"
 
     def cleanup(self) -> None:
         """Perform local cleanup of any remainders of the storage object."""
