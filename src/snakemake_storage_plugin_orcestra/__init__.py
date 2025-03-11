@@ -4,13 +4,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional
 from urllib import parse
 
-from orcestradownloader.managers import DatasetManager, download_dataset
-from orcestradownloader.models.base import BaseModel
 
 # Raise errors that will not be handled within this plugin but thrown upwards to
 # Snakemake and the user as WorkflowError.
+# from snakemake_interface_common.logging import get_logger
 from snakemake_interface_common.exceptions import WorkflowError  # noqa: F401
-from snakemake_interface_common.logging import get_logger
 from snakemake_interface_storage_plugins.io import IOCacheStorageInterface
 from snakemake_interface_storage_plugins.settings import (
     StorageProviderSettingsBase,
@@ -26,15 +24,25 @@ from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
     StorageProviderBase,
     StorageQueryValidationResult,
 )
-
-from snakemake_storage_plugin_orcestra.orcestra_helper import (
-    unified_manager,
-)
+from orcestradownloader.logging_config import logger as orcestra_logger
+from orcestradownloader.managers import UnifiedDataManager, DatasetManager, REGISTRY
+from orcestradownloader.dataset_config import DATASET_CONFIG
+from orcestradownloader.models.base import BaseModel
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-logger = get_logger()
+
+# Register all dataset managers automatically
+for name, config in DATASET_CONFIG.items():
+    manager = DatasetManager(
+        url=config.url,
+        cache_file=config.cache_file,
+        dataset_type=config.dataset_type,
+    )
+    REGISTRY.register(name, manager)
+
+unified_manager = UnifiedDataManager(REGISTRY, force=True)
 
 
 @dataclass
@@ -130,7 +138,7 @@ class StorageProvider(StorageProviderBase):
                     )
 
         if errormsg:
-            logger.error(errormsg)
+            orcestra_logger.error(errormsg)
             return StorageQueryValidationResult(query, False, errormsg)
 
         return StorageQueryValidationResult(query, True, "")
@@ -158,15 +166,15 @@ class StorageObject(StorageObjectRead):
         # This is optional and can be removed if not needed.
         # Alternatively, you can e.g. prepare a connection to your storage backend here.
         # and set additional attributes.
-        logger.info(f"StorageObject for query {self.query} created.")
-        logger.info(
+        orcestra_logger.debug(f"StorageObject for query {self.query} created.")
+        orcestra_logger.debug(
             f"Arguments: {self.keep_local=}, {self.retrieve=}, {self.provider=}, {self._overwrite_local_path=}"
         )
         parsed = parse.urlparse(self.query)
         self.dataset_type = parsed.netloc
         self.dataset_name = parsed.path.split("/")[1]
 
-        logger.info(
+        orcestra_logger.debug(
             f"Dataset type: {self.dataset_type} and name: {self.dataset_name}"
         )
 
@@ -174,9 +182,22 @@ class StorageObject(StorageObjectRead):
         self.manager = unified_manager.registry.get_manager(self.dataset_type)
 
         # use unified manager to fetch info
-        asyncio.run(
-            unified_manager.fetch_by_name(self.dataset_type, force=True)
-        )
+        try:
+            # Get the current event loop or create one if it doesn't exist
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If loop is already running, create a new future task and run it directly
+                asyncio.create_task(
+                    unified_manager.fetch_by_name(self.dataset_type, force=True)
+                )
+            else:
+                # If no loop is running, run the coroutine directly
+                loop.run_until_complete(
+                    unified_manager.fetch_by_name(self.dataset_type, force=True)
+                )
+        except RuntimeError:
+            # Fallback to creating a new loop if needed
+            asyncio.run(unified_manager.fetch_by_name(self.dataset_type, force=True))
 
         try:
             self.dataset_metadata = self.manager[self.dataset_name]
@@ -250,19 +271,48 @@ class StorageObject(StorageObjectRead):
 
         if self.dataset_metadata is None:
             errmsg = f"Dataset {self.dataset_name} not found in {self.dataset_type}."
-            logger.error(errmsg)
+            orcestra_logger.error(errmsg)
             raise WorkflowError(errmsg)
 
-        with Progress() as progress:
-            task = download_dataset(
-                download_link=self.dataset_metadata.download_link,
-                file_path=directory_path / f"{self.dataset_name}.RDS",
-                progress=progress,
-                timeout_seconds=3600,
-            )
-            paths = asyncio.run(task)
+        download_url = self.dataset_metadata.download_link
 
-        logger.debug(f"Downloaded dataset to {paths}")
+        if download_url is None:
+            errmsg = f"Download URL for dataset {self.dataset_name} not found in {self.dataset_type}."
+            orcestra_logger.error(errmsg)
+            raise WorkflowError(errmsg)
+
+        import requests
+
+        with Progress() as progress:
+            task = progress.add_task(
+                f"Downloading {self.dataset_name} from {self.dataset_type}",
+                total=100,
+            )
+            temp_file = f"{self.local_path()}.temp"
+            # Download the dataset to the local path
+            with open(temp_file, "wb") as f:
+                response = requests.get(download_url, stream=True)
+                # get total size based on header content-length
+                total_size = int(response.headers.get("content-length", 0))
+
+                if total_size == 0:
+                    orcestra_logger.warning(
+                        f"Could not determine total size of download for {self.dataset_name}."
+                    )
+                task = progress.add_task(
+                    f"Downloading {self.dataset_name} from {self.dataset_type}",
+                    total=total_size,
+                )
+                for chunk in response.iter_content(chunk_size=1024):
+                    f.write(chunk)
+                    progress.update(task, advance=len(chunk))
+
+            # rename the temp file to the final file
+            Path(temp_file).rename(self.local_path())
+            progress.update(task, completed=100)
+            progress.stop()
+
+        orcestra_logger.debug(f"Downloaded dataset to {self.local_path()}")
 
     # The following to methods are only required if the class inherits from
     # StorageObjectReadWrite.

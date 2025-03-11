@@ -1,0 +1,13 @@
+# # register storage provider (not needed if no custom settings are to be defined here)
+storage orcestra:
+    provider="orcestra",
+
+rule all:
+  input:
+    orcestra_file = storage.orcestra("orcestra://pharmacosets/GRAY_2013")
+  output:
+    "rawdata/GRAY_2013.RDS"
+  shell:
+    """
+    mv {input.orcestra_file} {output}
+    """

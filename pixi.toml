@@ -8,7 +8,7 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-python = "3.12.*"
+python = ">=3.12.9,<3.14"
 pip = ">=24.3.1,<25"
 
 [pypi-dependencies]
@@ -22,16 +22,18 @@ py312 = { features = ["py312", "test"], no-default-feature = true }
 
 ############################################## DEV ###############################################
 [feature.dev.pypi-dependencies]
-snakemake_storage_plugin_orcestra = { path = ".", editable = true }
+# snakemake_storage_plugin_orcestra = { path = ".", editable = true }
 orcestra-downloader = { path = "../orcestra-downloader", editable = true }
 # orcestra-downloader = {git = "https://github.com/jjjermiah/orcestra-downloader", branch = "dev"}
+snakemake_interface_common = "*"
 
-snakemake = { git = "https://github.com/snakemake/snakemake.git" }
 
 [feature.dev.dependencies]
 ipython = "*"
 ipykernel = "*"
 jupyterlab = "*"
+snakemake = "*"
+
 
 ############################################## PYTHON ###############################################
 
