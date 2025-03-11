@@ -1,11 +1,11 @@
+import difflib
+
+from orcestradownloader.dataset_config import DATASET_CONFIG
 from orcestradownloader.managers import (
     REGISTRY,
     DatasetManager,
     UnifiedDataManager,
 )
-
-from orcestradownloader.dataset_config import DATASET_CONFIG
-import difflib
 
 
 def similar_names(
@@ -17,7 +17,9 @@ def similar_names(
 # Register all dataset managers automatically
 for name, config in DATASET_CONFIG.items():
     manager = DatasetManager(
-        url=config.url, cache_file=config.cache_file, dataset_type=config.dataset_type
+        url=config.url,
+        cache_file=config.cache_file,
+        dataset_type=config.dataset_type,
     )
     REGISTRY.register(name, manager)
 

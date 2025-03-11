@@ -1,10 +1,16 @@
-from dataclasses import dataclass, field
-from typing import Any, Iterable, List, Optional
 import asyncio
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, List, Optional
+from urllib import parse
+
+from orcestradownloader.managers import DatasetManager, download_dataset
+from orcestradownloader.models.base import BaseModel
 
 # Raise errors that will not be handled within this plugin but thrown upwards to
 # Snakemake and the user as WorkflowError.
 from snakemake_interface_common.exceptions import WorkflowError  # noqa: F401
+from snakemake_interface_common.logging import get_logger
 from snakemake_interface_storage_plugins.io import IOCacheStorageInterface
 from snakemake_interface_storage_plugins.settings import (
     StorageProviderSettingsBase,
@@ -20,16 +26,13 @@ from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
     StorageProviderBase,
     StorageQueryValidationResult,
 )
+
 from snakemake_storage_plugin_orcestra.orcestra_helper import (
     unified_manager,
-    similar_names,
 )
-from urllib import parse
-from snakemake_interface_common.logging import get_logger
-from orcestradownloader.managers import UnifiedDataManager
-from orcestradownloader.models.base import BaseModel
-from datetime import datetime
-from pathlib import Path
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 logger = get_logger()
 
@@ -49,7 +52,7 @@ class StorageProvider(StorageProviderBase):
     # method. Instead, use __post_init__ to set additional attributes and initialize
     # futher stuff.
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # This is optional and can be removed if not needed.
         # Alternatively, you can e.g. prepare a connection to your storage backend here.
         # and set additional attributes.
@@ -63,17 +66,17 @@ class StorageProvider(StorageProviderBase):
             ExampleQuery(
                 query="orcestra://pharmacosets/CCLE_2015",
                 description="Download the CCLE 2015 dataset.",
-                query_type=QueryType.INPUT,
+                type=QueryType.INPUT,
             )
         ]
 
-    def rate_limiter_key(self, query: str, operation: Operation) -> Any:
+    def rate_limiter_key(self, query: str, operation: Operation) -> Any:  # noqa: ANN401
         """Return a key for identifying a rate limiter given a query and an operation.
         Notes
         -----
         Unused in orcestra-downloader
         """
-        ...
+        return None
 
     def default_max_requests_per_second(self) -> float:
         """Return the default maximum number of requests per second for this storage
@@ -82,7 +85,7 @@ class StorageProvider(StorageProviderBase):
         -----
         Unused in orcestra-downloader
         """
-        ...
+        return 0.0
 
     def use_rate_limiter(self) -> bool:
         """Return False if no rate limiting is needed for this provider.
@@ -90,7 +93,7 @@ class StorageProvider(StorageProviderBase):
         -----
         Unused in orcestra-downloader
         """
-        ...
+        return False
 
     @classmethod
     def is_valid_query(cls, query: str) -> StorageQueryValidationResult:
@@ -103,7 +106,7 @@ class StorageProvider(StorageProviderBase):
         try:
             parsed_query = parse.urlparse(query)
         except Exception as e:
-            errormsg = (f"cannot be parsed as URL ({e})",)
+            errormsg = f"cannot be parsed as URL ({e})"
         else:
             if parsed_query.scheme != "orcestra":
                 errormsg = (
@@ -115,17 +118,22 @@ class StorageProvider(StorageProviderBase):
                     f"Invalid netloc in query '{query}'."
                     f"{parsed_query.netloc} should be one of {datatypes}."
                 )
-            elif not parsed_query.path or (parsed_query.path.split("/") != 2):
-                errormsg = f"Invalid path in query '{query}'."
-                errormsg += (
-                    "Format should follow"
-                    f" 'orcestra://<datatype>/<dataset_name>' but got '{parsed_query}'."
-                )
+            elif not parsed_query.path:
+                # remove the slash at the beginning
+                dataset_name = parsed_query.path[1:]
+                # check if there are still slashes in the path
+                if "/" in dataset_name:
+                    errormsg = (
+                        f"Invalid path in query '{query}'. "
+                        f"Format should follow"
+                        " 'orcestra://<datatype>/<dataset_name>' but got '{parsed_query}'."
+                    )
 
         if errormsg:
+            logger.error(errormsg)
             return StorageQueryValidationResult(query, False, errormsg)
 
-        return StorageQueryValidationResult(True, "")
+        return StorageQueryValidationResult(query, True, "")
 
 
 # Required:
@@ -143,10 +151,10 @@ class StorageObject(StorageObjectRead):
 
     dataset_type: str = field(init=False)
     dataset_name: str = field(init=False)
-    manager: UnifiedDataManager = field(init=False)
-    dataset_metadata: BaseModel | None  = field(init=False)
+    manager: DatasetManager = field(init=False)
+    dataset_metadata: BaseModel | None = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # This is optional and can be removed if not needed.
         # Alternatively, you can e.g. prepare a connection to your storage backend here.
         # and set additional attributes.
@@ -158,20 +166,22 @@ class StorageObject(StorageObjectRead):
         self.dataset_type = parsed.netloc
         self.dataset_name = parsed.path.split("/")[1]
 
-        logger.info(f"Dataset type: {self.dataset_type} and name: {self.dataset_name}")
+        logger.info(
+            f"Dataset type: {self.dataset_type} and name: {self.dataset_name}"
+        )
 
         # initialize manager for this datatype
         self.manager = unified_manager.registry.get_manager(self.dataset_type)
 
         # use unified manager to fetch info
-        asyncio.run(unified_manager.fetch_by_name(self.dataset_type, force=False))
+        asyncio.run(
+            unified_manager.fetch_by_name(self.dataset_type, force=True)
+        )
 
         try:
             self.dataset_metadata = self.manager[self.dataset_name]
         except ValueError:
             self.dataset_metadata = None
-
-        logger.info(f"Dataset metadata: {self.dataset_metadata}")
 
     async def inventory(self, cache: IOCacheStorageInterface) -> None:
         """From this file, try to find as much existence and modification date
@@ -194,7 +204,7 @@ class StorageObject(StorageObjectRead):
     def local_suffix(self) -> str:
         """Return a unique suffix for the local path, determined from self.query."""
         parsed = parse.urlparse(self.query)
-        return f"{parsed.netloc}{parsed.path}"
+        return f"{parsed.netloc}{parsed.path}.RDS"
 
     def cleanup(self) -> None:
         """Perform local cleanup of any remainders of the storage object."""
@@ -207,13 +217,15 @@ class StorageObject(StorageObjectRead):
     # provided by snakemake-interface-storage-plugins.
     @retry_decorator
     def exists(self) -> bool:
-        if self.dataset_metadata is None:
-            return False
-        return True
+        return self.dataset_metadata is not None
 
     @retry_decorator
     def mtime(self) -> float:
         # return the modification time
+        if self.dataset_metadata is None:
+            # return infinity if no date is available
+            return float("-inf")
+
         created_date: datetime | None = self.dataset_metadata.date_created
 
         if created_date is None:
@@ -224,25 +236,33 @@ class StorageObject(StorageObjectRead):
     @retry_decorator
     def size(self) -> int:
         # return the size in bytes
-        ...
+        return 0
 
     @retry_decorator
     def retrieve_object(self) -> None:
         # Ensure that the object is accessible locally under self.local_path()
-        directory_path = Path(
-            "/Users/bhklab/dev/snakemake-dev/snakemake-storage-plugin-orcestra/rawdata"
+        directory_path = Path(self.local_path()).parent
+        if not directory_path.exists():
+            directory_path.mkdir(parents=True)
+        from rich.progress import (
+            Progress,
         )
-        paths = unified_manager.download_by_name(
-            manager_name=self.dataset_type,
-            ds_name=self.dataset_name,
-            directory=directory_path,
-            overwrite=False,
-            force=False,
-            timeout_seconds=3600,
-        )
-        logger.info(f"Downloaded files to {paths}")
 
+        if self.dataset_metadata is None:
+            errmsg = f"Dataset {self.dataset_name} not found in {self.dataset_type}."
+            logger.error(errmsg)
+            raise WorkflowError(errmsg)
 
+        with Progress() as progress:
+            task = download_dataset(
+                download_link=self.dataset_metadata.download_link,
+                file_path=directory_path / f"{self.dataset_name}.RDS",
+                progress=progress,
+                timeout_seconds=3600,
+            )
+            paths = asyncio.run(task)
+
+        logger.debug(f"Downloaded dataset to {paths}")
 
     # The following to methods are only required if the class inherits from
     # StorageObjectReadWrite.

@@ -50,6 +50,13 @@ pytest = "*"
 coverage = ">=7.6.12,<8"
 pytest-cov = ">=6.0.0,<7"
 
+[feature.test.tasks.test]
+cmd = "pytest -c config/pytest.ini"
+inputs = ["src", "tests", "config/pytest.ini", "config/coverage.toml"]
+outputs = ["coverage-report/coverage.xml"]
+description = "Run pytest"
+
+
 ############################################## QUALITY ###############################################
 # Quality includes linting, type checking, and formatting
 [feature.quality.dependencies]
