@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Iterable, List, Optional
+import asyncio
 
 # Raise errors that will not be handled within this plugin but thrown upwards to
 # Snakemake and the user as WorkflowError.
@@ -9,9 +10,7 @@ from snakemake_interface_storage_plugins.settings import (
     StorageProviderSettingsBase,
 )
 from snakemake_interface_storage_plugins.storage_object import (
-    StorageObjectGlob,
     StorageObjectRead,
-    StorageObjectWrite,
     retry_decorator,
 )
 from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
@@ -21,8 +20,18 @@ from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
     StorageProviderBase,
     StorageQueryValidationResult,
 )
-from snakemake_storage_plugin_orcestra.orcestra_helper import manager, similar_names
+from snakemake_storage_plugin_orcestra.orcestra_helper import (
+    unified_manager,
+    similar_names,
+)
 from urllib import parse
+from snakemake_interface_common.logging import get_logger
+from orcestradownloader.managers import UnifiedDataManager
+from orcestradownloader.models.base import BaseModel
+from datetime import datetime
+from pathlib import Path
+
+logger = get_logger()
 
 
 @dataclass
@@ -89,7 +98,7 @@ class StorageProvider(StorageProviderBase):
         # Ensure that also queries containing wildcards (e.g. {sample}) are accepted
         # and considered valid. The wildcards will be resolved before the storage
         # object is actually used.
-        datatypes = list(manager.names())
+        datatypes = list(unified_manager.names())
         errormsg = ""
         try:
             parsed_query = parse.urlparse(query)
@@ -106,7 +115,7 @@ class StorageProvider(StorageProviderBase):
                     f"Invalid netloc in query '{query}'."
                     f"{parsed_query.netloc} should be one of {datatypes}."
                 )
-            elif not parsed_query.path or (parsed_query.split("/") != 2):
+            elif not parsed_query.path or (parsed_query.path.split("/") != 2):
                 errormsg = f"Invalid path in query '{query}'."
                 errormsg += (
                     "Format should follow"
@@ -115,15 +124,6 @@ class StorageProvider(StorageProviderBase):
 
         if errormsg:
             return StorageQueryValidationResult(query, False, errormsg)
-
-        dataset_names = manager.registry.get_manager(parsed_query.netloc).names()
-        if parsed_query.path not in dataset_names:
-            maybe_ds_names = similar_names(parsed_query.path, dataset_names)
-            errormsg = (
-                f"Dataset '{parsed_query.path}' not found in '{parsed_query.netloc}'."
-                f"Did you mean one of {maybe_ds_names}?"
-            )
-            return StorageQueryValidationResult(False, errormsg)
 
         return StorageQueryValidationResult(True, "")
 
@@ -134,19 +134,44 @@ class StorageProvider(StorageProviderBase):
 # snakemake-storage-http for comparison), remove the corresponding base classes
 # from the list of inherited items.
 class StorageObject(StorageObjectRead):
-
     # following attributes are inherited from StorageObjectRead:
-        # query = query
-        # keep_local = keep_local
-        # retrieve = retrieve
-        # provider = provider
-        # _overwrite_local_path = None
+    # query = query
+    # keep_local = keep_local
+    # retrieve = retrieve
+    # provider = provider
+    # _overwrite_local_path = None
+
+    dataset_type: str = field(init=False)
+    dataset_name: str = field(init=False)
+    manager: UnifiedDataManager = field(init=False)
+    dataset_metadata: BaseModel | None  = field(init=False)
 
     def __post_init__(self):
         # This is optional and can be removed if not needed.
         # Alternatively, you can e.g. prepare a connection to your storage backend here.
         # and set additional attributes.
-        pass
+        logger.info(f"StorageObject for query {self.query} created.")
+        logger.info(
+            f"Arguments: {self.keep_local=}, {self.retrieve=}, {self.provider=}, {self._overwrite_local_path=}"
+        )
+        parsed = parse.urlparse(self.query)
+        self.dataset_type = parsed.netloc
+        self.dataset_name = parsed.path.split("/")[1]
+
+        logger.info(f"Dataset type: {self.dataset_type} and name: {self.dataset_name}")
+
+        # initialize manager for this datatype
+        self.manager = unified_manager.registry.get_manager(self.dataset_type)
+
+        # use unified manager to fetch info
+        asyncio.run(unified_manager.fetch_by_name(self.dataset_type, force=False))
+
+        try:
+            self.dataset_metadata = self.manager[self.dataset_name]
+        except ValueError:
+            self.dataset_metadata = None
+
+        logger.info(f"Dataset metadata: {self.dataset_metadata}")
 
     async def inventory(self, cache: IOCacheStorageInterface) -> None:
         """From this file, try to find as much existence and modification date
@@ -182,13 +207,19 @@ class StorageObject(StorageObjectRead):
     # provided by snakemake-interface-storage-plugins.
     @retry_decorator
     def exists(self) -> bool:
-        # return True if the object exists
-        ...
+        if self.dataset_metadata is None:
+            return False
+        return True
 
     @retry_decorator
     def mtime(self) -> float:
         # return the modification time
-        ...
+        created_date: datetime | None = self.dataset_metadata.date_created
+
+        if created_date is None:
+            # return infinity if no date is available
+            return float("-inf")
+        return float(created_date.timestamp())
 
     @retry_decorator
     def size(self) -> int:
@@ -198,30 +229,43 @@ class StorageObject(StorageObjectRead):
     @retry_decorator
     def retrieve_object(self) -> None:
         # Ensure that the object is accessible locally under self.local_path()
-        ...
+        directory_path = Path(
+            "/Users/bhklab/dev/snakemake-dev/snakemake-storage-plugin-orcestra/rawdata"
+        )
+        paths = unified_manager.download_by_name(
+            manager_name=self.dataset_type,
+            ds_name=self.dataset_name,
+            directory=directory_path,
+            overwrite=False,
+            force=False,
+            timeout_seconds=3600,
+        )
+        logger.info(f"Downloaded files to {paths}")
+
+
 
     # The following to methods are only required if the class inherits from
     # StorageObjectReadWrite.
 
-    @retry_decorator
-    def store_object(self) -> None:
-        # Ensure that the object is stored at the location specified by
-        # self.local_path().
-        ...
+    # @retry_decorator
+    # def store_object(self) -> None:
+    #     # Ensure that the object is stored at the location specified by
+    #     # self.local_path().
+    #     ...
 
-    @retry_decorator
-    def remove(self) -> None:
-        # Remove the object from the storage.
-        ...
+    # @retry_decorator
+    # def remove(self) -> None:
+    #     # Remove the object from the storage.
+    #     ...
 
     # The following to methods are only required if the class inherits from
     # StorageObjectGlob.
 
-    @retry_decorator
-    def list_candidate_matches(self) -> Iterable[str]:
-        """Return a list of candidate matches in the storage for the query."""
-        # This is used by glob_wildcards() to find matches for wildcards in the query.
-        # The method has to return concretized queries without any remaining wildcards.
-        # Use snakemake_executor_plugins.io.get_constant_prefix(self.query) to get the
-        # prefix of the query before the first wildcard.
-        ...
+    # @retry_decorator
+    # def list_candidate_matches(self) -> Iterable[str]:
+    #     """Return a list of candidate matches in the storage for the query."""
+    #     # This is used by glob_wildcards() to find matches for wildcards in the query.
+    #     # The method has to return concretized queries without any remaining wildcards.
+    #     # Use snakemake_executor_plugins.io.get_constant_prefix(self.query) to get the
+    #     # prefix of the query before the first wildcard.
+    #     ...

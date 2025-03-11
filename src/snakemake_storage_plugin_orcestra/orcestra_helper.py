@@ -1,11 +1,10 @@
 from orcestradownloader.managers import (
     REGISTRY,
-    DatasetRegistry,
     DatasetManager,
     UnifiedDataManager,
 )
 
-from orcestradownloader.dataset_config import DATASET_CONFIG, DatasetConfig
+from orcestradownloader.dataset_config import DATASET_CONFIG
 import difflib
 
 
@@ -22,5 +21,4 @@ for name, config in DATASET_CONFIG.items():
     )
     REGISTRY.register(name, manager)
 
-manager = UnifiedDataManager(REGISTRY)
-manager.hydrate_cache()
+unified_manager = UnifiedDataManager(REGISTRY, force=True)
