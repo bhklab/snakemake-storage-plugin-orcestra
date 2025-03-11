@@ -3,6 +3,7 @@ authors = [{ name = "Jermiah Joseph", email = "jermiahjoseph98@gmail.com" }]
 dependencies = [
   "snakemake-interface-common (>=1.17.4,<2.0.0)",
   "snakemake-interface-storage-plugins (>=3.3.0,<4.0.0)",
+  "orcestra-downloader",
 ]
 name = "snakemake-storage-plugin-orcestra"
 requires-python = ">= 3.11"
