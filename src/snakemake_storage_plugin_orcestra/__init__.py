@@ -35,30 +35,31 @@ from snakemake_interface_storage_plugins.storage_provider import (  # noqa: F401
 # settings.
 @dataclass
 class StorageProviderSettings(StorageProviderSettingsBase):
-    myparam: Optional[int] = field(
-        default=None,
-        metadata={
-            "help": "Some help text",
-            # Optionally request that setting is also available for specification
-            # via an environment variable. The variable will be named automatically as
-            # SNAKEMAKE_<storage-plugin-name>_<param-name>, all upper case.
-            # This mechanism should only be used for passwords, usernames, and other
-            # credentials.
-            # For other items, we rather recommend to let people use a profile
-            # for setting defaults
-            # (https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles).
-            "env_var": False,
-            # Optionally specify a function that parses the value given by the user.
-            # This is useful to create complex types from the user input.
-            "parse_func": ...,
-            # If a parse_func is specified, you also have to specify an unparse_func
-            # that converts the parsed value back to a string.
-            "unparse_func": ...,
-            # Optionally specify that setting is required when the executor is in use.
-            "required": True,
-            # Optionally specify multiple args with "nargs": "+"
-        },
-    )
+    pass
+    # myparam: Optional[int] = field(
+    #     default=None,
+    #     metadata={
+    #         "help": "Some help text",
+    #         # Optionally request that setting is also available for specification
+    #         # via an environment variable. The variable will be named automatically as
+    #         # SNAKEMAKE_<storage-plugin-name>_<param-name>, all upper case.
+    #         # This mechanism should only be used for passwords, usernames, and other
+    #         # credentials.
+    #         # For other items, we rather recommend to let people use a profile
+    #         # for setting defaults
+    #         # (https://snakemake.readthedocs.io/en/stable/executing/cli.html#profiles).
+    #         "env_var": False,
+    #         # Optionally specify a function that parses the value given by the user.
+    #         # This is useful to create complex types from the user input.
+    #         "parse_func": ...,
+    #         # If a parse_func is specified, you also have to specify an unparse_func
+    #         # that converts the parsed value back to a string.
+    #         "unparse_func": ...,
+    #         # Optionally specify that setting is required when the executor is in use.
+    #         "required": True,
+    #         # Optionally specify multiple args with "nargs": "+"
+    #     },
+    # )
 
 
 # Required:
