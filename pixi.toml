@@ -25,14 +25,12 @@ py312 = { features = ["py312", "test"], no-default-feature = true }
 # snakemake_storage_plugin_orcestra = { path = ".", editable = true }
 # orcestra-downloader = { path = "../orcestra-downloader", editable = true }
 orcestra-downloader = {git = "https://github.com/jjjermiah/orcestra-downloader", branch = "dev"}
-snakemake_interface_common = "*"
 
 
 [feature.dev.dependencies]
 ipython = "*"
 ipykernel = "*"
 jupyterlab = "*"
-snakemake = "*"
 
 
 ############################################## PYTHON ###############################################
@@ -46,11 +44,13 @@ python = "3.12.*"
 ############################################## TEST ################################################
 [feature.test.pypi-dependencies]
 snakemake_storage_plugin_orcestra = { path = ".", editable = true }
+snakemake_interface_common = "*"
 
 [feature.test.dependencies]
 pytest = "*"
 coverage = ">=7.6.12,<8"
 pytest-cov = ">=6.0.0,<7"
+snakemake = "*"
 
 [feature.test.tasks.test]
 cmd = "pytest -c config/pytest.ini"
