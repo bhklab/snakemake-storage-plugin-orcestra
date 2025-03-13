@@ -11,6 +11,7 @@ version = "0.1.0"
 readme = "README.md"
 license = "MIT"
 keywords = ["snakemake", "storage", "plugin", "google cloud storage"]
+
 [project.urls]
 repository = "https://github.com/bhklab/snakemake-storage-plugin-orcestra"
 documentation = "https://snakemake.github.io/snakemake-plugin-catalog/plugins/storage/orcestra.html"
