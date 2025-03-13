@@ -14,12 +14,14 @@ pip = ">=24.3.1,<25"
 [pypi-dependencies]
 
 [environments]
-dev = ["test", "dev"]
+dev = ["test", "dev", "release", "quality", "build"]
 quality = ["quality"]
 test = ["test"]
 
 py311 = { features = ["py311", "test"], no-default-feature = true }
 py312 = { features = ["py312", "test"], no-default-feature = true }
+
+publish = ["release", "build"]
 
 ############################################## DEV ###############################################
 [feature.dev.pypi-dependencies]
@@ -27,12 +29,10 @@ py312 = { features = ["py312", "test"], no-default-feature = true }
 # orcestra-downloader = { path = "../orcestra-downloader", editable = true }
 orcestra-downloader = { git = "https://github.com/jjjermiah/orcestra-downloader", branch = "dev" }
 
-
 [feature.dev.dependencies]
 ipython = "*"
 ipykernel = "*"
 jupyterlab = "*"
-
 
 ############################################## PYTHON ###############################################
 
@@ -79,3 +79,31 @@ type-check.description = "Run mypy type check."
 
 qc.depends-on = ["ruff-format", "ruff-check", "type-check"]
 qc.description = "Quality check: ruff & mypy"
+
+#################################### RELEASE & BUILD ###############################################
+[feature.release.dependencies]
+python-semantic-release = ">=8.5.1"
+
+[feature.release.tasks]
+semver = 'echo "Next Version is: $(semantic-release -c config/releaserc.toml version --print)"'
+release = "semantic-release -c config/releaserc.toml version"
+
+[feature.build.dependencies]
+hatch = "*"
+rattler-build = ">=0.32.0,<0.33"
+
+[feature.build.tasks]
+# Builds the package and publishes it to the test.pypi.org repository
+build = { cmd = "hatch build --clean", inputs = ["src"], outputs = ["dist/*"] }
+
+publish-pypi = { cmd = "hatch publish --yes --repo main", inputs = [
+  "dist/*",
+], depends-on = [
+  "build",
+] }
+
+publish-test = { cmd = "hatch publish --yes --repo test", inputs = [
+  "dist/*",
+], depends-on = [
+  "build",
+] }
