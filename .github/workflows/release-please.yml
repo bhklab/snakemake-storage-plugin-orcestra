@@ -24,7 +24,30 @@ jobs:
         id: release
         with:
           release-type: python
-          package-name:
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    steps:
+      - name: Checkout the code with tag ${{ needs.release-please.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag }}
+
+      - name: Install Pixi
+        uses: prefix-dev/setup-pixi@v0.8.3
+        with:
+          environments: publish
+          pixi-version: v0.42.1
+
+      - name: Publish to PyPI
+        env:
+          HATCH_INDEX_USER: __token__
+          HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+          HATCH_INDEX_REPO: https://upload.pypi.org/legacy/
+        run: |
+          pixi run --environment publish publish-pypi
 
   # publish:
   #   runs-on: ubuntu-latest
