@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/bhklab/snakemake-storage-plugin-orcestra/compare/v0.1.0...v0.2.0) (2025-03-13)
+
+
+### Features
+
+* add documentation for orcestra plugin and querying datasets ([08f376e](https://github.com/bhklab/snakemake-storage-plugin-orcestra/commit/08f376e3efd23a9cb5175c7043e1e45b12e8e414))
+* add publish job to release workflow for PyPI deployment ([826ebb0](https://github.com/bhklab/snakemake-storage-plugin-orcestra/commit/826ebb03afb4eefa456870f9c957f79c9b24355b))
+* add README documentation for Snakemake Storage Plugin and update project URLs in pyproject.toml ([bb29453](https://github.com/bhklab/snakemake-storage-plugin-orcestra/commit/bb294534dd63be238e4927f6e9f1350828d2f314))
+* update pyproject.toml with project metadata, dependencies, and URLs ([f38466e](https://github.com/bhklab/snakemake-storage-plugin-orcestra/commit/f38466ed529b640613e6bf23e41eeaf9109d65a6))
+
+
+### Bug Fixes
+
+* ensure newline at end of file in intro documentation ([13aa410](https://github.com/bhklab/snakemake-storage-plugin-orcestra/commit/13aa410023fa8bed8645a42f69ab081089340fa8))
+
 ## 0.1.0 (2025-03-13)
 
 
