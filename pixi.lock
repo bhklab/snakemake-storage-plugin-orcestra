@@ -10722,8 +10722,8 @@ packages:
   timestamp: 1741552024696
 - pypi: .
   name: snakemake-storage-plugin-orcestra
-  version: 0.1.0
-  sha256: 6d8a93c6cd634a55fb89ae4d07edb1a9b0c27cdca78cc3149b5b4acd5ae7815e
+  version: 0.2.0
+  sha256: 8d1c49eeeced9084600d807009ee54fb2e923085569191b8b5e27bf6582038b0
   requires_dist:
   - snakemake-interface-common>=1.17.4,<2.0.0
   - snakemake-interface-storage-plugins>=3.3.0,<4.0.0
